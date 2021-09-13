@@ -1,0 +1,1 @@
+# go-azure-blob-repository
