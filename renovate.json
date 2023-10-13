@@ -3,5 +3,5 @@
   "extends": [
     "config:base"
   ],
-   "schedule": ["every 1st day of month at 3:00"]
+   "schedule": ["before 4am on the first day of the month"]
 }
