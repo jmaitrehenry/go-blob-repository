@@ -39,4 +39,3 @@ func (brc BlobRepositoryConfiguration) Endpoint() string {
 func (brc BlobRepositoryConfiguration) CDNEndpoint() string {
 	return fmt.Sprintf("https://%s.azureedge.net/", brc.AccountName)
 }
-
