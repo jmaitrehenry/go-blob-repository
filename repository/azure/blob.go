@@ -3,14 +3,14 @@ package azure
 import (
 	"context"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"io"
 	"mime"
 	"net/url"
 
 	"github.com/kumojin/go-blob-repository/models"
 	"github.com/kumojin/go-blob-repository/repository"
-
-	"github.com/Azure/azure-storage-blob-go/azblob"
 )
 
 type defaultBlobRepository struct {
@@ -24,10 +24,6 @@ func NewBlobRepository(config models.BlobRepositoryConfiguration) repository.Blo
 
 func (r defaultBlobRepository) Upload(metadata models.BlobMetadata, in io.Reader) (*models.UploadURL, error) {
 	fileName := BuildFileNameFromMetadata(metadata)
-	blobURL, err := r.GetBlobURL(fileName)
-	if err != nil {
-		return nil, err
-	}
 
 	cdnURL, err := r.GetCDNURL(fileName)
 	if err != nil {
@@ -39,21 +35,28 @@ func (r defaultBlobRepository) Upload(metadata models.BlobMetadata, in io.Reader
 		return nil, err
 	}
 
-	// Prepare objects: block URL (for uploading pieces one by one), context and upload options
-	blockBlobURL := azblob.NewBlockBlobURL(*blobURL, azblob.NewPipeline(credentials, azblob.PipelineOptions{}))
-	o := azblob.UploadStreamToBlockBlobOptions{
-		BlobHTTPHeaders: azblob.BlobHTTPHeaders{
-			ContentType:  metadata.ContentType,
-			CacheControl: "no-cache",
-		},
-		BufferSize: 2 * 1024 * 1024, // Size of the rotating buffers that are used when uploading
-		MaxBuffers: 3,               // Number of rotating buffers that are used when uploading
+	client, err := azblob.NewClientWithSharedKeyCredential(r.config.Endpoint(), credentials, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	ctx := context.Background()
-	_, err = azblob.UploadStreamToBlockBlob(ctx, in, blockBlobURL, o)
+	noCache := "no-cache"
+	_, err = client.UploadStream(context.Background(), r.config.Bucket, fileName, in, &azblob.UploadStreamOptions{
+		BlockSize:   2 * 1024 * 1024,
+		Concurrency: 3,
+		HTTPHeaders: &blob.HTTPHeaders{
+			BlobContentType:  &metadata.ContentType,
+			BlobCacheControl: &noCache,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	blobUrl, _ := r.GetBlobURL(fileName)
+
 	urls := models.UploadURL{
-		BlobURL: *blobURL,
+		BlobURL: *blobUrl,
 		CDNUrl:  *cdnURL,
 	}
 	return &urls, err
